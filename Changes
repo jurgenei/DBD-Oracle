@@ -18,9 +18,16 @@ Revision history for DBD::Oracle
   Ignore constraints which are not enabled in primary/foreign key_info
   (GH#23, Martin J. Evans)
 
+* 25-08-2018
+
+  [ENHANCEMENT]
+
+  Implemented implicit result sets from stored procedures using 
+  OCIStmtGetNextResult call available since Oracle 12.2c
+  (Jurgen Hildebrand)
 
 1.75_2    2014-11-19
-
+ 
   [ENHANCEMENT]
 
   Try and set -l when the build would have failed (H.Merijn Brand)

@@ -280,7 +280,12 @@ cancel(sth)
 	ST(0) = dbd_st_cancel(sth, imp_sth) ? &PL_sv_yes : &PL_sv_no;
 
 
-
+void
+ora_next_result(sth)
+	SV *		sth
+	CODE:
+	D_imp_sth(sth);
+	ST(0) = dbd_st_get_next_result(sth, imp_sth) ? &PL_sv_yes : &PL_sv_no;
 
 MODULE = DBD::Oracle	PACKAGE = DBD::Oracle::db
 

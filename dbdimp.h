@@ -74,6 +74,7 @@ struct imp_dbh_st {
 	int max_nested_cursors;	 /* limit on cached nested cursors per stmt */
 	int array_chunk_size;  /* the max size for an array bind */
     ub4 server_version; /* version of Oracle server */
+        int                     implicit_prefetch; /* 12.2 implict prefetch, to mimic sybase behavior */
 };
 
 #define DBH_DUP_OFF sizeof(dbih_dbc_t)
@@ -94,7 +95,8 @@ struct imp_sth_st {
 	OCIError		*errhp;	/* copy of dbh pointer	*/
 	OCIServer		*srvhp;	/* copy of dbh pointer	*/
 	OCISvcCtx		*svchp;	/* copy of dbh pointer	*/
-	OCIStmt			*stmhp;	/* oci statement  handle */
+	OCIStmt			*stmhp;	/* oci statement handle */
+
 	OCIDescribe 	*dschp; /* oci describe handle */
 	int				is_child;  /* if this is child from a ref cursor or SP*/
 	ub2				stmt_type;	/* OCIAttrGet OCI_ATTR_STMT_TYPE	*/
@@ -149,6 +151,10 @@ struct imp_sth_st {
 	sword			rs_array_status;	/* status of last fetch */
 	int 			RowCacheSize; 		/* both of these are defined by DBI spec*/
 	int 			RowsInCache;		/* this vaue is RO and cannot be set*/
+#ifdef OCI_ATTR_IMPLICIT_RESULT_COUNT
+	OCIStmt			*implicit_stmhp; /* oci implcit statement handle */
+        ub4                     *implicit_result_count;
+#endif /* OCI_ATTR_IMPLICIT_RESULT_COUNT */
 
 };
 #define IMP_STH_EXECUTING	0x0001
@@ -400,6 +406,7 @@ sb4 reg_taf_callback _((SV *dbh, imp_dbh_t *imp_dbh));
 #define dbd_db_commit		ora_db_commit
 #define dbd_db_rollback		ora_db_rollback
 #define dbd_db_cancel		ora_db_cancel
+#define dbd_db_get_next_result  ora_db_get_next_result /* new entry oracle 12.2 */
 #define dbd_db_disconnect	ora_db_disconnect
 #define dbd_db_destroy		ora_db_destroy
 #define dbd_db_STORE_attrib	ora_db_STORE_attrib
@@ -407,6 +414,7 @@ sb4 reg_taf_callback _((SV *dbh, imp_dbh_t *imp_dbh));
 #define dbd_st_prepare		ora_st_prepare
 #define dbd_st_rows			ora_st_rows
 #define dbd_st_cancel		ora_st_cancel
+#define dbd_st_get_next_result  ora_st_get_next_result /* new entry oracle 12.2 */
 #define dbd_st_execute		ora_st_execute
 #define dbd_st_fetch		ora_st_fetch
 #define dbd_st_finish		ora_st_finish

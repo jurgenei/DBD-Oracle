@@ -597,5 +597,13 @@
 		OciTp, (void*)svchp,(void*)errhp,(void*)admhp,mode,		\
 		oci_status_name(stat)),stat : stat
 
+#define OCIStmtGetNextResult_log_stat(impsth,sh,eh   ,res,rtype,  stat)  \
+    stat=OCIStmtGetNextResult(sh,eh,res,rtype,OCI_DEFAULT);              \
+    (DBD_OCI_TRACEON(impsth)) ? PerlIO_printf(DBD_OCI_TRACEFP(impsth),   \
+                        "%sStmtFetch(%p, %p,%d, %d)=%s\n",  i            \
+                        OciTp, (void*)sh,(void*)eh  ,                    \
+                        (void *)res,*rtype,                              \
+                        oci_status_name(stat)),stat : stat
+
 
 #endif /* !DBD_OCI_TRACEON */

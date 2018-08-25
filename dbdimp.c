@@ -908,7 +908,67 @@ dbd_st_cancel(SV *sth, imp_sth_t *imp_sth)
 	return 1;
 }
 
+#ifdef OCI_ATTR_IMPLICIT_RESULT_COUNT
+int
+dbd_st_get_next_result(SV *sth, imp_sth_t *imp_sth)
+{
+   dTHX;
+   ub4 implicit_result_count = imp_sth->implicit_result_count;
+   if (implicit_result_count == 0)
+     return 0;
 
+   /*
+   reinit result set
+   */
+   
+   rs_array_init(imp_sth);
+
+   void *result;
+   ub4 rtype;
+   sword status;
+   OCIStmtGetNextResult_log_stat(imp_sth, imp_sth->stmhp, imp_sth->errhp,&result,&rtype,status);
+
+   if (status == OCI_NO_DATA) {
+     return 0;
+   }
+   if (status != OCI_SUCCESS) {
+         oci_error(sth, imp_sth->errhp, status, "OCIStmtGetNextResult");
+         return 0;
+   }
+   if (rtype != OCI_RESULT_TYPE_SELECT) {
+	croak ("Invalid rtype") ;
+   }
+   imp_sth -> implicit_stmhp = (OCIStmt *)result;
+
+   int res = 0;
+   DBIc_ROW_COUNT(imp_sth) = 0;
+   DBIc_ACTIVE_on(imp_sth);
+
+   ub4 num_fields;
+   OCIAttrGet_stmhp_stat2(imp_sth, imp_sth -> implicit_stmhp ,&num_fields, 0, OCI_ATTR_PARAM_COUNT, status);
+   
+   DBIc_NUM_FIELDS(imp_sth) = num_fields;
+   DBIS->set_attr_k(sth, sv_2mortal(newSVpvn("NUM_OF_FIELDS",13)), 0, sv_2mortal(newSViv(num_fields)));
+
+   imp_sth->stmt_type = OCI_STMT_SELECT;
+
+   /* bit of a hack, fool dbd_describe to 
+      describe implicit_stmhp rather than main st handle stmhp
+    */
+
+   OCIStmt  *stmthp = imp_sth -> stmhp;
+   imp_sth -> stmhp = imp_sth -> implicit_stmhp;
+   imp_sth->done_desc = 0;
+   res = dbd_describe(sth, imp_sth);
+   imp_sth -> stmhp = stmthp;
+
+   if (!res) {
+      PerlIO_printf(DBIc_LOGPIO(imp_sth), "describe failed");
+   }
+
+   return 1;
+}
+#endif /* OCI_ATTR_IMPLICIT_RESULT_COUNT */
 
 int
 dbd_db_rollback(SV *dbh, imp_dbh_t *imp_dbh)
@@ -1117,6 +1177,9 @@ dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 		imp_dbh->pool_incr = SvIV (valuesv);
 	}
 #endif
+        else if (kl==21 && strEQ(key, "ora_implicit_prefetch") ) {
+                imp_dbh->implicit_prefetch = SvIV (valuesv);
+        }
 	else if (kl==16 && strEQ(key, "ora_taf_function") ) {
         if (imp_dbh->taf_function)
             SvREFCNT_dec(imp_dbh->taf_function);
@@ -1287,6 +1350,9 @@ dbd_db_FETCH_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv)
 	else if (kl==22 && strEQ(key, "ora_parse_error_offset")) {
 		retsv = newSViv(imp_dbh->parse_error_offset);
 	}
+        else if (kl==21 && strEQ(key, "ora_implicit_prefetch")) {
+                retsv = newSViv(imp_dbh->implicit_prefetch);
+        }
 	if (!retsv)
 		return Nullsv;
 	if (cacheit) {	/* cache for next time (via DBI quick_FETCH)	*/
@@ -3515,6 +3581,13 @@ dbd_st_execute(SV *sth, imp_sth_t *imp_sth) /* <= -2:error, >=0:ok row count, (-
 	}
 	else {
 		OCIAttrGet_stmhp_stat(imp_sth, &row_count, 0, OCI_ATTR_ROW_COUNT, status);
+#ifdef OCI_ATTR_IMPLICIT_RESULT_COUNT
+                /* set the implicit row count */
+                OCIAttrGet_stmhp_stat(imp_sth, &imp_sth->implicit_result_count, 0, OCI_ATTR_IMPLICIT_RESULT_COUNT, status);
+                if (imp_sth->implicit_result_count > 0 && imp_dbh->implicit_prefetch) {
+                     dbd_st_get_next_result(sth, imp_sth);
+                }
+#endif /* OCI_ATTR_IMPLICIT_RESULT_COUNT */
 	}
 
 	if (debug >= 2 || dbd_verbose >= 3 ) {
@@ -4060,7 +4133,8 @@ dbd_st_rows(SV *sth, imp_sth_t *imp_sth)
 	dTHX;
 	ub4 row_count = 0;
 	sword status;
-	OCIAttrGet_stmhp_stat(imp_sth, &row_count, 0, OCI_ATTR_ROW_COUNT, status);
+        OCIStmt *stmhp = imp_sth->implicit_stmhp ? imp_sth->implicit_stmhp : imp_sth->stmhp;
+	OCIAttrGet_stmhp_stat2(imp_sth,stmhp,&row_count, 0, OCI_ATTR_ROW_COUNT, status);
 	if (status != OCI_SUCCESS) {
 	oci_error(sth, imp_sth->errhp, status, "OCIAttrGet OCI_ATTR_ROW_COUNT");
 	return -1;
@@ -4436,6 +4510,13 @@ dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 		while(--i >= 0)
 			av_store(av, i, newSViv(imp_sth->fbh[i].len_char_size));
 	}
+#ifdef OCI_ATTR_IMPLICIT_RESULT_COUNT
+        else if (kl==16 && strEQ(key, "syb_more_results")) {
+                /* mimic sybase driver */
+                retsv = newSViv(dbd_st_get_next_result(sth, imp_sth));
+		cacheit = FALSE;
+        }
+#endif /* OCI_ATTR_IMPLICIT_RESULT_COUNT */
 	else {
 		return Nullsv;
 	}

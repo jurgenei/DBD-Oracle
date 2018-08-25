@@ -76,6 +76,7 @@ int	 dbd_st_prepare _((SV *sth, imp_sth_t *imp_sth,
 int	 dbd_st_rows	_((SV *sth, imp_sth_t *imp_sth));
 int	 dbd_st_execute _((SV *sth, imp_sth_t *imp_sth));
 int	 dbd_st_cancel  _((SV *sth, imp_sth_t *imp_sth));
+int	 dbd_st_get_next_result  _((SV *sth, imp_sth_t *imp_sth));
 AV	*dbd_st_fetch	_((SV *sth, imp_sth_t *imp_sth));
 
 int	 dbd_st_finish	_((SV *sth, imp_sth_t *imp_sth));

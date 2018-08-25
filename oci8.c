@@ -3985,6 +3985,9 @@ dbd_st_fetch(SV *sth, imp_sth_t *imp_sth){
 			fbh->fetch_cleanup(sth, fbh);
 	}
 
+        /* one ref for stmh */
+        OCIStmt *stmhp = imp_sth->implicit_stmhp ? imp_sth->implicit_stmhp : imp_sth->stmhp;
+
 	if (ora_fetchtest && DBIc_ROW_COUNT(imp_sth)>0) {
 		--ora_fetchtest; /* trick for testing performance */
 		status = OCI_SUCCESS;
@@ -4008,14 +4011,14 @@ dbd_st_fetch(SV *sth, imp_sth_t *imp_sth){
 					imp_sth->fetch_position, oci_fetch_options(imp_sth->fetch_orient),
                     imp_sth->fetch_offset);
 
-			OCIStmtFetch_log_stat(imp_sth, imp_sth->stmhp, imp_sth->errhp,1, imp_sth->fetch_orient,imp_sth->fetch_offset, status);
+			OCIStmtFetch_log_stat(imp_sth, stmhp, imp_sth->errhp,1, imp_sth->fetch_orient,imp_sth->fetch_offset, status);
 				/*this will work without a round trip so might as well open it up for all statments handles*/
 				/* default and OCI_FETCH_NEXT are the same so this avoids miscaluation on the next value*/
 			if (status==OCI_NO_DATA){
                 return Nullav;
             }
 
-			OCIAttrGet_stmhp_stat(imp_sth, &imp_sth->fetch_position, 0, OCI_ATTR_CURRENT_POSITION, status);
+			OCIAttrGet_stmhp_stat2(imp_sth, stmhp, &imp_sth->fetch_position, 0, OCI_ATTR_CURRENT_POSITION, status);
 
 			if (DBIc_DBISTATE(imp_sth)->debug >= 4 || dbd_verbose >= 4 )
 				PerlIO_printf(
@@ -4026,7 +4029,7 @@ dbd_st_fetch(SV *sth, imp_sth_t *imp_sth){
 		else {
 
 			if (imp_sth->row_cache_off){ /*Do not use array fetch or local cache */
-				OCIStmtFetch_log_stat(imp_sth, imp_sth->stmhp, imp_sth->errhp,1,(ub2)OCI_FETCH_NEXT, OCI_DEFAULT, status);
+				OCIStmtFetch_log_stat(imp_sth, stmhp, imp_sth->errhp,1,(ub2)OCI_FETCH_NEXT, OCI_DEFAULT, status);
 				imp_sth->rs_fetch_count++;
 				imp_sth->rs_array_idx=0;
 
@@ -4038,14 +4041,14 @@ dbd_st_fetch(SV *sth, imp_sth_t *imp_sth){
 				if (imp_sth->rs_array_num_rows<=imp_sth->rs_array_idx && (imp_sth->rs_array_status==OCI_SUCCESS || imp_sth->rs_array_status==OCI_SUCCESS_WITH_INFO)) {
 /* 			PerlIO_printf(DBIc_LOGPIO(imp_sth), "	dbd_st_fetch fields...b\n");*/
 
-					OCIStmtFetch_log_stat(imp_sth, imp_sth->stmhp,imp_sth->errhp,imp_sth->rs_array_size,(ub2)OCI_FETCH_NEXT,OCI_DEFAULT,status);
+					OCIStmtFetch_log_stat(imp_sth, stmhp,imp_sth->errhp,imp_sth->rs_array_size,(ub2)OCI_FETCH_NEXT,OCI_DEFAULT,status);
 
 					imp_sth->rs_array_status=status;
 					imp_sth->rs_fetch_count++;
 					if (oci_warn &&  (imp_sth->rs_array_status == OCI_SUCCESS_WITH_INFO)) {
 						oci_error(sth, imp_sth->errhp, status, "OCIStmtFetch");
 					}
-					OCIAttrGet_stmhp_stat(imp_sth, &imp_sth->rs_array_num_rows,0,OCI_ATTR_ROWS_FETCHED, status);
+					OCIAttrGet_stmhp_stat2(imp_sth,stmhp,&imp_sth->rs_array_num_rows,0,OCI_ATTR_ROWS_FETCHED, status);
 					imp_sth->rs_array_idx=0;
 					imp_dbh->RowsInCache =imp_sth->rs_array_size;
 					imp_sth->RowsInCache =imp_sth->rs_array_size;

@@ -97,6 +97,7 @@ package DBD::Oracle;
             ora_ping
             ora_stmt_type_name
             ora_stmt_type
+            ora_next_result
         /;
 
         $drh;
@@ -2277,6 +2278,12 @@ Returns a hash reference containing the current NLS parameters, as given
 by the v$nls_parameters view. The values fetched are cached between calls.
 To cause the latest values to be fetched, pass a true value to the function.
 
+=head2 B<implicit_prefetch ( [ $boolean ] )>
+
+Returns a boolean showing if prefetch is enabled, when set ora_next_result will behave like DBD::Sybase driver
+where first result is fetched in $sth->execute()
+
+
 =head1 ORACLE-SPECIFIC DATABASE FUNCTIONS
 
 =head2 B<ora_server_version>
@@ -3581,6 +3588,11 @@ method call failed.
 =head2 B<RowsInCache>
 
 Returns the number of un-fetched rows in the cache for selects.
+
+=head2 B<syb_more_results>
+
+Calls $st->ora_next_result and returns boolean if a new resultset is available. This attribute exists i
+to maintain backward compatebility with DBD::Sybase
 
 =head1 SCROLLABLE CURSORS
 
