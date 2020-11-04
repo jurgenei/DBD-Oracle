@@ -114,9 +114,13 @@ ora_cygwin_set_env(name, value)
 
 #endif /* __CYGWIN32__ */
 
-
 INCLUDE: Oracle.xsi
 
+
+
+# ------------------------------------------------------------
+# statement interface
+# ------------------------------------------------------------
 MODULE = DBD::Oracle	PACKAGE = DBD::Oracle::st
 
 
@@ -280,6 +284,7 @@ cancel(sth)
 	ST(0) = dbd_st_cancel(sth, imp_sth) ? &PL_sv_yes : &PL_sv_no;
 
 
+
 void
 ora_next_result(sth)
 	SV *		sth
@@ -287,6 +292,9 @@ ora_next_result(sth)
 	D_imp_sth(sth);
 	ST(0) = dbd_st_get_next_result(sth, imp_sth) ? &PL_sv_yes : &PL_sv_no;
 
+# ------------------------------------------------------------
+# database level interface
+# ------------------------------------------------------------
 MODULE = DBD::Oracle	PACKAGE = DBD::Oracle::db
 
 void
@@ -707,6 +715,10 @@ ora_lob_chunk_size(dbh, locator)
 	}
 
 
+
+# ------------------------------------------------------------
+# driver level interface
+# ------------------------------------------------------------
 MODULE = DBD::Oracle	PACKAGE = DBD::Oracle::dr
 
 void
@@ -717,6 +729,11 @@ init_oci(drh)
 	dbd_init_oci(DBIS) ;
 	dbd_init_oci_drh(imp_drh) ;
 
-
-
-
+void
+DESTROY(drh)
+    SV *        drh
+    PPCODE:
+    /* keep in sync with default DESTROY in DBI.xs (currently there is no dr default) */
+    D_imp_drh(drh);
+    ST(0) = &PL_sv_yes;
+    dbd_dr_destroy(drh, imp_drh);

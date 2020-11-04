@@ -11,23 +11,44 @@
 typedef struct taf_callback_st taf_callback_t;
 
 struct taf_callback_st {
-	SV   *function; /*User supplied TAF functiomn*/
-    SV   *dbh_ref;
+	SV   *function;     /*User supplied TAF function*/
+	SV   *dbh_ref;
 };
 
 typedef struct imp_fbh_st imp_fbh_t;
 
 
+/* Define implementation specific driver handle data structure */
 struct imp_drh_st {
 	dbih_drc_t com;		/* MUST be first element in structure	*/
-	OCIEnv *envhp;
+	OCIEnv *envhp;		/* global environment handler, see also */
+						/* connect attr ora_envhp               */
+	bool leak_handles;	/* shared dbh's will leak handles in    */
+						/* dbd_dr_destroy(), see connect attr   */
+						/* ora_dbh_share for more information   */
+#ifdef ORA_OCI_112
+	HV *charset_hv;
+	HV *pool_hv;
+#endif
 	SV *ora_long;
 	SV *ora_trunc;
 	SV *ora_cache;
 	SV *ora_cache_o;		/* for ora_open() cache override */
 };
 
-/* Define dbh implementor data structure */
+#ifdef ORA_OCI_112
+typedef struct session_pool_st session_pool_t;
+struct session_pool_st {
+	OCIEnv		*envhp;
+	OCIError 	*errhp;
+	OCISPool	*poolhp;
+	OraText		*pool_name;
+	ub4		pool_namel;
+	int		active_sessions;
+};
+#endif
+
+/* Define implementation specific database handle data structure */
 struct imp_dbh_st {
 	dbih_dbc_t com;		/* MUST be first element in structure	*/
 
@@ -38,22 +59,24 @@ struct imp_dbh_st {
 #endif
 
 	void *(*get_oci_handle) _((imp_dbh_t *imp_dbh, int handle_type, int flags));
-	OCIEnv 		*envhp;		/* copy of drh pointer	*/
+	OCIEnv 		*envhp;		/* session environment handler, this is mostly */
+							/* a copy of imp_drh->envhp, see also connect  */
+							/* attr ora_envhp                              */
 	OCIError 	*errhp;
 	OCIServer 	*srvhp;
 	OCISvcCtx 	*svchp;
 	OCISession	*seshp;
 #ifdef ORA_OCI_112
-	OCIAuthInfo *authp;
-	OCISPool    *poolhp;
-	text        *pool_name;
-	ub4			pool_namel;
+	session_pool_t	*pool;
+	OraText		session_tag[50];
+	boolean		session_tag_found;
 	bool		using_drcp;
 	text		*pool_class;
 	ub4			pool_classl;
 	ub4			pool_min;
 	ub4			pool_max;
 	ub4			pool_incr;
+	ub4			pool_rlb;
 	char		*driver_name;/*driver name user defined*/
 #endif
     SV          *taf_function; /*User supplied TAF functiomn*/
@@ -85,7 +108,7 @@ struct imp_dbh_st {
 typedef struct lob_refetch_st lob_refetch_t; /* Define sth implementor data structure */
 
 
-/*statement structure */
+/* Define implementation specific statement data structure */
 struct imp_sth_st {
 
 	dbih_stc_t com;		/* MUST be first element in structure	*/
@@ -181,17 +204,17 @@ struct fbh_obj_st {  /* embedded object or table will work recursively*/
 	OCIParam		*parmdp;			/*Describe attributes of the object OCI_DTYPE_PARAM*/
 	OCIParam		*parmap;			/*Describe attributes of the object OCI_ATTR_COLLECTION_ELEMENT OCI_ATTR_PARAM*/
  	OCIType	 		*tdo;				/*object's TDO handle */
-	OCITypeCode 	typecode;			/*object's OOCI_ATTR_TYPECODE */
+	OCITypeCode 	typecode;			/*object's OCI_ATTR_TYPECODE */
 	OCITypeCode 	col_typecode;		/*if collection this is its OCI_ATTR_COLLECTION_TYPECODE */
 	OCITypeCode 	element_typecode;	/*if collection this is its element's OCI_ATTR_TYPECODE*/
-	OCIRef			*obj_ref;			/*if an embeded object this is ref handle to its TDO*/
-	OCIInd			*obj_ind;			/*Null indictator for object */
+	OCIRef			*obj_ref;			/*if an embedded object this is ref handle to its TDO*/
+	OCIInd			*obj_ind;			/*Null indicator for object */
 	OCIComplexObject *obj_value;		/*the actual value from the DB*/
 	OCIType			*obj_type;		 	/*if an embeded object this is the  OCIType returned by a OCIObjectPin*/
 	ub1				is_final_type;		/*object's OCI_ATTR_IS_FINAL_TYPE*/
 	fbh_obj_t		*fields;			/*one object for each field/property*/
 	ub2				field_count;		/*The number of fields Not really needed but nice to have*/
-	fbh_obj_t		*next_subtype;		/*There is strored information about subtypes for inteherited objects*/
+	fbh_obj_t		*next_subtype;		/*There is stored information about subtypes for inherited objects*/
 	AV				*value;				/*The value to send back to Perl This way there are no memory leaks*/
 	SV				*full_type_name;	/*Perl value of full type name = schema_name "." type_name*/
 
@@ -400,6 +423,7 @@ sb4 reg_taf_callback _((SV *dbh, imp_dbh_t *imp_dbh));
 /* These defines avoid name clashes for multiple statically linked DBD's	*/
 
 #define dbd_init			ora_init
+#define dbd_dr_destroy		ora_dr_destroy
 #define dbd_db_login		ora_db_login
 #define dbd_db_login6		ora_db_login6
 #define dbd_db_do			ora_db_do
@@ -409,6 +433,7 @@ sb4 reg_taf_callback _((SV *dbh, imp_dbh_t *imp_dbh));
 #define dbd_db_get_next_result  ora_db_get_next_result /* new entry oracle 12.2 */
 #define dbd_db_disconnect	ora_db_disconnect
 #define dbd_db_destroy		ora_db_destroy
+#define dbd_take_imp_data	ora_take_imp_data
 #define dbd_db_STORE_attrib	ora_db_STORE_attrib
 #define dbd_db_FETCH_attrib	ora_db_FETCH_attrib
 #define dbd_st_prepare		ora_st_prepare
